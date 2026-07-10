@@ -1,10 +1,11 @@
 import {
-  Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Query,
+  BadRequestException,
+  Body, Controller, Get, Injectable, Module, NotFoundException, Param, Patch, Post, Query,
 } from '@nestjs/common';
 import { IsArray, IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthUser, CurrentUser, RequirePermission } from '../common/decorators';
+import { AuthOnly, AuthUser, CurrentUser, RequirePermission } from '../common/decorators';
 
 class StaffMarkEntryDto {
   @IsString() staffId!: string;
@@ -89,6 +90,33 @@ export class StaffMonitoringService {
     });
   }
 
+  // ── personal tasks / lesson plans (self-scoped: any staff member) ──
+  async myTasks(user: AuthUser) {
+    if (!user.staffId) throw new BadRequestException('No staff profile');
+    return this.prisma.staffTask.findMany({
+      where: { staffId: user.staffId },
+      orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
+    });
+  }
+
+  async addMyTask(user: AuthUser, dto: { title: string; detail?: string; dueDate?: string }) {
+    if (!user.staffId) throw new BadRequestException('No staff profile');
+    return this.prisma.staffTask.create({
+      data: {
+        staffId: user.staffId,
+        title: dto.title,
+        detail: dto.detail ?? null,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+      },
+    });
+  }
+
+  async updateMyTask(user: AuthUser, taskId: string, status: string) {
+    const t = await this.prisma.staffTask.findFirst({ where: { id: taskId, staffId: user.staffId ?? '' } });
+    if (!t) throw new NotFoundException('Task not found');
+    return this.prisma.staffTask.update({ where: { id: taskId }, data: { status: status as never } });
+  }
+
   async staffAttendanceHistory(user: AuthUser, staffId: string, month?: string) {
     const staff = await this.prisma.staff.findFirst({ where: { id: staffId, schoolId: user.schoolId } });
     if (!staff) throw new NotFoundException('Staff member not found');
@@ -133,6 +161,25 @@ export class StaffMonitoringController {
   @RequirePermission('staff', 'read')
   history(@CurrentUser() user: AuthUser, @Param('staffId') staffId: string, @Query('month') month?: string) {
     return this.svc.staffAttendanceHistory(user, staffId, month);
+  }
+
+  // Self-scoped: a staff member's own tasks / lesson-plan checklist.
+  @Get('my-tasks')
+  @AuthOnly()
+  myTasks(@CurrentUser() user: AuthUser) {
+    return this.svc.myTasks(user);
+  }
+
+  @Post('my-tasks')
+  @AuthOnly()
+  addMyTask(@CurrentUser() user: AuthUser, @Body() dto: { title: string; detail?: string; dueDate?: string }) {
+    return this.svc.addMyTask(user, dto);
+  }
+
+  @Patch('my-tasks/:taskId')
+  @AuthOnly()
+  updateMyTask(@CurrentUser() user: AuthUser, @Param('taskId') taskId: string, @Body() body: { status: string }) {
+    return this.svc.updateMyTask(user, taskId, body.status);
   }
 }
 
