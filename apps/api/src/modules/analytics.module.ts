@@ -331,7 +331,7 @@ export class AnalyticsService {
     // subject breakdown of latest exam
     const latestExamId = results.length ? results[results.length - 1].exam.id : null;
     const subjects = await this.prisma.subject.findMany({ where: { schoolId: user.schoolId } });
-    const subjectName = new Map(subjects.map((s) => [s.id, s.name]));
+    const subjectName = new Map<string, string>(subjects.map((s) => [s.id, s.name] as const));
     const subjectScores = latestExamId
       ? results.filter((r) => r.exam.id === latestExamId).map((r) => ({
           subject: subjectName.get(r.subjectId) ?? '?',

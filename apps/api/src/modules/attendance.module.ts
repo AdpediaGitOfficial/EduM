@@ -65,7 +65,9 @@ export class AttendanceService {
     const records = await this.prisma.attendanceRecord.findMany({
       where: { sectionId, date },
     });
-    const byStudent = new Map(records.map((r) => [r.studentId, r]));
+    const byStudent = new Map<string, (typeof records)[number]>(
+      records.map((r) => [r.studentId, r] as const),
+    );
     return students.map((s) => ({
       ...s,
       status: byStudent.get(s.id)?.status ?? null,

@@ -275,7 +275,7 @@ export class GradebookService {
       orderBy: { exam: { startDate: 'asc' } },
     });
     const subjects = await this.prisma.subject.findMany({ where: { schoolId: user.schoolId } });
-    const subjectName = new Map(subjects.map((s) => [s.id, s.name]));
+    const subjectName = new Map<string, string>(subjects.map((s) => [s.id, s.name] as const));
 
     const byExam = new Map<string, { examId: string; examName: string; date: Date; rows: { subject: string; score: number; maxScore: number; grade: string | null }[] }>();
     for (const r of results) {
