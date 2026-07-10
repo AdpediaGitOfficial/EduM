@@ -154,6 +154,25 @@ IP allowlist CRUD.
   service layer (per matrix `CRUD(staff)`).
 - Docker images unbuilt in this environment (no daemon) — see audit table.
 
+## Post-audit: standard Node.js deployment (branch `standard-deployment`) ✅
+- Removed all Docker artifacts (docker-compose.yml, Dockerfiles, entrypoint,
+  Docker docs). Target stack is now Node 20 + PM2 + Nginx + PostgreSQL +
+  Redis on a standard Linux/Windows server.
+- Added `ecosystem.config.js` (edum-api in 2-instance cluster mode,
+  edum-web fork mode, log files, memory restarts), `deploy/nginx.conf`
+  (/api → :4000 direct, static asset caching, gzip, security headers,
+  12 MB upload limit) and `DEPLOYMENT.md` (Linux + Windows walkthroughs,
+  TLS via certbot, updates, backups, security checklist, troubleshooting).
+- Security hardening: Helmet on the API, `trust proxy` for real client IPs
+  behind Nginx, security headers + `poweredByHeader: false` in Next.
+- Removed Next `output: standalone` (Docker-specific); `next start` under PM2.
+- Verification on this branch: nav-link/page audit (every sidebar href
+  resolves to a real page, no duplicates), production builds of both apps,
+  Jest 34/34, live Playwright pass over all role dashboards
+  (admin/principal/VP/HR/accountant/teacher/parent/student).
+- This resolves the previous audit caveat: deployment no longer depends on
+  the unverified Docker path — the PM2 flow was executed end-to-end here.
+
 ## Post-audit: Lovable removal ✅
 - Deleted `legacy-lovable/` (prototype source, `.lovable/` metadata,
   Supabase client/config/migrations, bun lockfile, archived zip) and the

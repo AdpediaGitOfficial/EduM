@@ -9,9 +9,9 @@ students.
 |------------|-------|
 | Frontend   | Next.js 15 (App Router) · React 19 · TailwindCSS 4 · React Query · React Hook Form · Recharts |
 | Backend    | NestJS 11 · Prisma 6 · JWT (access + refresh, rotating sessions) · bcrypt |
-| Data       | PostgreSQL 16 · Redis 7 (rate limiting/queues) · MinIO (S3-compatible files) |
+| Data       | PostgreSQL 16 · Redis 7 (rate limiting/queues) · S3-compatible file storage (optional — local-disk fallback) |
 | Testing    | Jest + Supertest (RBAC guards, tenant isolation, fee reconciliation) |
-| Deployment | Docker + docker-compose (one command brings up everything, migrated & seeded) |
+| Deployment | Standard Node.js server: PM2 process manager + Nginx reverse proxy (no Docker) |
 
 EduM is fully standalone: auth (JWT + bcrypt), authorization (database-driven
 RBAC), data access (Prisma), file storage (S3-compatible) and background
@@ -19,26 +19,10 @@ providers are all first-party code — no app-builder or BaaS dependencies.
 
 ---
 
-## Quick start (Docker — recommended)
+## Quick start (local development)
 
-Prerequisites: Docker with the compose plugin.
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-That single command starts **postgres + redis + minio + api + web**, applies
-migrations, and loads the demo seed (idempotent — restarts don't duplicate).
-
-- Web app: http://localhost:3000
-- API: http://localhost:4000/api/health
-- MinIO console: http://localhost:9001
-
-## Quick start (bare metal)
-
-Prerequisites: Node 20+, PostgreSQL 16, Redis (optional), MinIO (optional —
-falls back to local `./uploads`).
+Prerequisites: Node 20+, PostgreSQL 16, Redis (optional), any S3-compatible
+store (optional — uploads fall back to local `./uploads`).
 
 ```bash
 npm install
@@ -47,6 +31,18 @@ npm run migrate -w apps/api            # prisma migrate deploy
 npm run seed                           # idempotent demo seed
 npm run dev                            # api on :4000 + web on :3000
 ```
+
+## Production deployment (PM2 + Nginx)
+
+```bash
+npm install && npm run build           # build API + web
+npm run migrate -w apps/api && npm run seed
+pm2 start ecosystem.config.js          # edum-api (cluster) + edum-web
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/edum   # then enable + certbot
+```
+
+Full step-by-step (Linux and Windows, TLS, backups, updates, troubleshooting):
+**[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Demo logins
 
@@ -109,10 +105,12 @@ The suite boots the real Nest app against the seeded database and asserts:
 ## Repository layout
 
 ```
-apps/api        NestJS API (src/modules/* one file per domain module)
-  prisma/       schema.prisma, migrations, seed.ts
-  test/         Jest integration + unit tests
-apps/web        Next.js app (src/app portals, src/features shared UI logic)
-docker/         Dockerfiles + API entrypoint (migrate → seed → serve)
-BUILD_LOG.md    honest per-phase build record incl. known gaps
+apps/api             NestJS API (src/modules/* one file per domain module)
+  prisma/            schema.prisma, migrations, seed.ts
+  test/              Jest integration + unit tests
+apps/web             Next.js app (src/app portals, src/features shared UI logic)
+ecosystem.config.js  PM2 process definitions (edum-api cluster + edum-web)
+deploy/nginx.conf    reverse-proxy config (/api → :4000, rest → :3000)
+DEPLOYMENT.md        server setup guide (Linux + Windows, TLS, backups)
+BUILD_LOG.md         honest per-phase build record incl. known gaps
 ```

@@ -22,7 +22,14 @@ export default function ParentDashboard() {
       />
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(children ?? []).map((c) => (
-          <button key={c.id} onClick={() => setChildId(c.id)} className="text-left">
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setChildId(c.id)}
+            onKeyDown={(e) => e.key === 'Enter' && setChildId(c.id)}
+            className="cursor-pointer text-left"
+          >
             <Card className={`p-4 transition-colors ${active === c.id ? 'border-brand-400 ring-1 ring-brand-400' : 'hover:border-slate-300'}`}>
               <p className="font-semibold">{c.user.firstName} {c.user.lastName}</p>
               <p className="text-xs text-slate-400">{c.admissionNo}</p>
@@ -35,7 +42,7 @@ export default function ParentDashboard() {
                 <Link onClick={(e) => e.stopPropagation()} className="text-brand-600 hover:underline" href={`/parent/children/${c.id}/report-card`}>Report card</Link>
               </div>
             </Card>
-          </button>
+          </div>
         ))}
       </div>
       {active ? <StudentOverview studentId={active} /> : <EmptyState title="No children linked to your account" />}
