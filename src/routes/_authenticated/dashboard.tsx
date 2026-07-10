@@ -1,0 +1,861 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { AppShell, PageHeader } from "@/components/app-shell";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { supabase } from "@/integrations/supabase/client";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { UserPlus, CalendarPlus, Megaphone, GraduationCap, Clock, MapPin, ClipboardCheck, BookOpenCheck, CalendarDays } from "lucide-react";
+import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+
+export const Route = createFileRoute("/_authenticated/dashboard")({
+  component: Dashboard,
+});
+
+function StatCard({ label, value, subtitle, tone }: { label: string; value: string; subtitle?: string; tone: "sky" | "indigo" | "violet" | "coral" }) {
+  const bg = {
+    sky: "bg-stat-sky text-stat-sky-foreground",
+    indigo: "bg-stat-indigo text-stat-indigo-foreground",
+    violet: "bg-stat-violet text-stat-violet-foreground",
+    coral: "bg-stat-coral text-stat-coral-foreground",
+  }[tone];
+  return (
+    <div className={`rounded-2xl p-5 ${bg}`}>
+      <div className="text-sm opacity-80">{label}</div>
+      <div className="font-display text-4xl font-semibold mt-2">{value}</div>
+      {subtitle && <div className="text-xs opacity-75 mt-2">{subtitle}</div>}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: string; tone: "sky" | "indigo" | "violet" | "coral" }) {
+  const bg = {
+    sky: "bg-stat-sky text-stat-sky-foreground",
+    indigo: "bg-stat-indigo text-stat-indigo-foreground",
+    violet: "bg-stat-violet text-stat-violet-foreground",
+    coral: "bg-stat-coral text-stat-coral-foreground",
+  }[tone];
+  return (
+    <div className={`rounded-2xl p-3 ${bg}`}>
+      <div className="text-[11px] opacity-80 truncate">{label}</div>
+      <div className="font-display text-2xl font-semibold mt-1">{value}</div>
+    </div>
+  );
+}
+
+function Dashboard() {
+  const { user } = useCurrentUser();
+  return (
+    <AppShell>
+      {user?.primaryRole === "admin" && <AdminDashboard fullName={user.fullName} />}
+      {user?.primaryRole === "teacher" && <TeacherDashboard fullName={user.fullName} />}
+      {user?.primaryRole === "student" && <StudentDashboard userId={user.id} fullName={user.fullName} />}
+      {user?.primaryRole === "parent" && <ParentDashboard userId={user.id} fullName={user.fullName} />}
+      {user && !user.primaryRole && (
+        <div className="p-8">
+          <p>No role assigned yet. Contact your administrator.</p>
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+function AdminDashboard({ fullName }: { fullName: string }) {
+  const { data } = useQuery({
+    queryKey: ["admin-dashboard"],
+    queryFn: async () => {
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const [students, teachers, classes, fees, payments] = await Promise.all([
+        supabase.from("students").select("id", { count: "exact", head: true }),
+        supabase.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role", "teacher"),
+        supabase.from("classes").select("id", { count: "exact", head: true }),
+        supabase.from("fee_assignments").select("amount_due,amount_paid,status"),
+        supabase.from("payments").select("amount").gte("paid_at", monthStart),
+      ]);
+      const dueTotal = (fees.data ?? []).reduce((s, f) => s + Number(f.amount_due) - Number(f.amount_paid), 0);
+      const collectedMonth = (payments.data ?? []).reduce((s, p) => s + Number(p.amount), 0);
+      const pendingCount = (fees.data ?? []).filter((f) => f.status !== "paid").length;
+      return {
+        studentCount: students.count ?? 0,
+        teacherCount: teachers.count ?? 0,
+        classCount: classes.count ?? 0,
+        dueTotal,
+        collectedMonth,
+        pendingCount,
+      };
+    },
+  });
+
+  const yr = `${new Date().getFullYear()}–${new Date().getFullYear() + 1}`;
+  return (
+    <>
+      <PageHeader title={`Welcome ${fullName.split(" ")[0]}`} subtitle="Overview of your school's operations." />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 rounded-2xl overflow-hidden relative min-h-[240px] bg-[oklch(0.9_0.08_240)] p-6">
+          <div className="absolute top-4 right-4 rounded-xl bg-white/80 backdrop-blur px-4 py-2 flex items-center gap-2">
+            <CalendarPlus className="size-4 text-primary" />
+            <div className="text-xs">
+              <div className="text-muted-foreground">Academic Year</div>
+              <div className="font-semibold">{yr}</div>
+            </div>
+          </div>
+          <svg viewBox="0 0 400 200" className="absolute bottom-0 left-0 w-full" preserveAspectRatio="none">
+            <path d="M0,150 Q100,90 200,120 T400,110 L400,200 L0,200 Z" fill="oklch(0.75 0.15 145)" opacity="0.7"/>
+            <path d="M0,170 Q100,130 200,150 T400,140 L400,200 L0,200 Z" fill="oklch(0.65 0.15 145)"/>
+            <circle cx="320" cy="60" r="16" fill="oklch(0.85 0.15 80)"/>
+            <polygon points="120,155 130,130 140,155" fill="oklch(0.45 0.15 275)"/>
+            <polygon points="260,158 270,128 280,158" fill="oklch(0.45 0.15 275)"/>
+            <circle cx="180" cy="150" r="6" fill="oklch(0.6 0.15 25)"/>
+            <rect x="177" y="150" width="6" height="15" fill="oklch(0.5 0.15 275)"/>
+            <circle cx="210" cy="145" r="6" fill="oklch(0.55 0.15 240)"/>
+            <rect x="207" y="145" width="6" height="18" fill="oklch(0.55 0.15 240)"/>
+          </svg>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          <StatCard label="Total Students" value={String(data?.studentCount ?? 0)} subtitle="enrolled" tone="sky" />
+          <StatCard label="Teachers" value={String(data?.teacherCount ?? 0)} subtitle="active staff" tone="indigo" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <StatCard label="Collected this month" value={`₹${(data?.collectedMonth ?? 0).toFixed(2)}`} subtitle="revenue" tone="violet" />
+        <StatCard label="Pending Dues" value={`₹${(data?.dueTotal ?? 0).toFixed(2)}`} subtitle={`${data?.pendingCount ?? 0} outstanding`} tone="coral" />
+        <StatCard label="Sections" value={String(data?.classCount ?? 0)} subtitle="classes running" tone="indigo" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <QuickAction to="/users" icon={UserPlus} label="Add User" />
+        <QuickAction to="/students" icon={GraduationCap} label="Admit Student" />
+        <QuickAction to="/announcements" icon={Megaphone} label="Post Notice" />
+        <QuickAction to="/holidays" icon={CalendarPlus} label="Add Holiday" />
+      </div>
+    </>
+  );
+}
+
+function QuickAction({ to, icon: Icon, label }: { to: string; icon: typeof UserPlus; label: string }) {
+  return (
+    <Link to={to} className="rounded-2xl bg-card border p-5 hover:shadow-md hover:-translate-y-0.5 transition flex flex-col items-center gap-2">
+      <Icon className="size-5 text-primary" />
+      <span className="text-sm font-medium">{label}</span>
+    </Link>
+  );
+}
+
+function TeacherDashboard({ fullName }: { fullName: string }) {
+  return <TeacherDashboardView fullName={fullName} />;
+}
+
+const EMPLOYEE_ID_MAP: Record<string, { empId: string; designation: string }> = {
+  "anjali.nair@school.edu": { empId: "TCH-1008", designation: "Mathematics Teacher" },
+};
+
+function TeacherDashboardView({ fullName }: { fullName: string }) {
+  const { user } = useCurrentUser();
+  const { data } = useQuery({
+    enabled: !!user,
+    queryKey: ["teacher-dash", user?.id],
+    queryFn: async () => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { data: tc } = await supabase.from("teacher_classes").select("class_id, classes(id, name, section)").eq("teacher_id", user!.id);
+      const classIds = (tc ?? []).map((r) => r.class_id);
+      const classes = (tc ?? []).map((r: any) => r.classes).filter(Boolean);
+
+      const [subjRes, studRes, ttRes, annRes, hwRes, hwByClassRes, examRes, attTodayRes, teacherRes] = await Promise.all([
+        classIds.length ? supabase.from("subjects").select("id,name,class_id,classes(name,section)").in("class_id", classIds) : Promise.resolve({ data: [] as any[] }),
+        classIds.length ? supabase.from("students").select("id, class_id, gender").in("class_id", classIds) : Promise.resolve({ data: [] as any[] }),
+        classIds.length ? supabase.from("timetable").select("id, day_of_week, start_time, end_time, room, class_id, subjects(name), classes(name, section)").eq("teacher_id", user!.id).order("start_time") : Promise.resolve({ data: [] as any[] }),
+        supabase.from("announcements").select("id,title,body,created_at").order("created_at", { ascending: false }).limit(4),
+        supabase.from("homework").select("id", { count: "exact", head: true }).eq("teacher_id", user!.id).eq("status", "active"),
+        classIds.length ? supabase.from("homework").select("class_id").eq("teacher_id", user!.id).eq("status", "active") : Promise.resolve({ data: [] as any[] }),
+        classIds.length ? supabase.from("exams").select("id,name,exam_date,class_id,classes(name,section)").in("class_id", classIds).gte("exam_date", today).order("exam_date") : Promise.resolve({ data: [] as any[] }),
+        classIds.length ? supabase.from("attendance").select("class_id").in("class_id", classIds).eq("date", today) : Promise.resolve({ data: [] as any[] }),
+        supabase.from("teachers" as never).select("full_name,email,subject,status,phone,qualification").eq("email", user!.email ?? "").maybeSingle(),
+      ]);
+
+      const todayDow = new Date().getDay();
+      const todaySchedule = (ttRes.data ?? []).filter((t: any) => t.day_of_week === todayDow);
+      const attendedClassIds = new Set(((attTodayRes.data as any[]) ?? []).map((r) => r.class_id));
+      const attendancePending = classIds.filter((id) => !attendedClassIds.has(id)).length;
+
+      const teacherSubject = (teacherRes as any).data?.subject as string | undefined;
+      const allSubjects = (subjRes.data ?? []) as any[];
+      const mySubjects = teacherSubject
+        ? allSubjects.filter((s) => (s.name ?? "").toLowerCase() === teacherSubject.toLowerCase())
+        : allSubjects;
+
+      const students = (studRes.data ?? []) as any[];
+      const hwByClass = (hwByClassRes.data ?? []) as { class_id: string }[];
+      const examsByClass = (examRes.data ?? []) as any[];
+
+      const classStats = classes.map((c: any) => {
+        const cs = students.filter((s) => s.class_id === c.id);
+        return {
+          id: c.id,
+          name: c.name,
+          section: c.section,
+          total: cs.length,
+          boys: cs.filter((s) => s.gender === "male").length,
+          girls: cs.filter((s) => s.gender === "female").length,
+          subject: teacherSubject ?? "—",
+          attendanceMarked: attendedClassIds.has(c.id),
+          homeworkPending: hwByClass.filter((h) => h.class_id === c.id).length,
+          upcomingExams: examsByClass.filter((e) => e.class_id === c.id).length,
+        };
+      });
+
+      return {
+        classes,
+        classStats,
+        classCount: classIds.length,
+        subjects: mySubjects,
+        subjectCount: mySubjects.length,
+        studentCount: students.length,
+        todaySchedule,
+        announcements: annRes.data ?? [],
+        homeworkPending: (hwRes as any).count ?? 0,
+        upcomingExams: examsByClass,
+        attendancePending,
+        teacher: (teacherRes as any).data ?? null,
+      };
+    },
+  });
+
+  const first = fullName.split(" ")[0];
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const periodStatus = (start: string, end: string): { label: string; cls: string } => {
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const s = sh * 60 + sm; const e = eh * 60 + em;
+    if (nowMin < s) return { label: "Upcoming", cls: "bg-sky-100 text-sky-700 border-sky-200" };
+    if (nowMin >= s && nowMin <= e) return { label: "Ongoing", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+    return { label: "Completed", cls: "bg-muted text-muted-foreground border-border" };
+  };
+  const todayCount = data?.todaySchedule.length ?? 0;
+  const identity = EMPLOYEE_ID_MAP[user?.email ?? ""] ?? {
+    empId: "TCH-" + (user?.id ?? "").slice(0, 4).toUpperCase(),
+    designation: data?.teacher?.subject ? `${data.teacher.subject} Teacher` : "Teacher",
+  };
+
+  return (
+    <>
+      <PageHeader title={`Welcome ${first}`} subtitle={`You have ${todayCount} class${todayCount === 1 ? "" : "es"} scheduled today.`} />
+
+      {/* Profile + KPIs */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="rounded-2xl p-6 lg:col-span-1 bg-gradient-to-br from-primary/10 to-accent/10 border-primary/20">
+          <div className="flex items-start gap-4">
+            <div className="size-14 rounded-2xl bg-primary text-primary-foreground grid place-items-center text-xl font-semibold">
+              {fullName.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-lg font-semibold truncate">{fullName}</div>
+              <div className="text-xs text-muted-foreground">{identity.empId} · {identity.designation}</div>
+              <div className="mt-2 flex items-center gap-2">
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-0 capitalize">
+                  {data?.teacher?.status ?? "active"}
+                </Badge>
+                {data?.teacher?.qualification && (
+                  <span className="text-[11px] text-muted-foreground truncate">{data.teacher.qualification}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+          <StatCard label="My Subjects" value={String(data?.subjectCount ?? 0)} subtitle="assigned" tone="sky" />
+          <StatCard label="My Classes" value={String(data?.classCount ?? 0)} subtitle="teaching" tone="indigo" />
+          <StatCard label="Total Students" value={String(data?.studentCount ?? 0)} subtitle="in your classes" tone="violet" />
+          <StatCard label="Periods Today" value={String(todayCount)} subtitle="scheduled" tone="coral" />
+        </div>
+      </div>
+
+      {/* Secondary KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <Card className="rounded-2xl p-5">
+          <div className="text-xs text-muted-foreground">Attendance Pending</div>
+          <div className="font-display text-3xl font-semibold mt-1">{data?.attendancePending ?? 0} <span className="text-sm font-normal text-muted-foreground">classes</span></div>
+          <div className="text-xs text-muted-foreground mt-1">not marked today</div>
+        </Card>
+        <Card className="rounded-2xl p-5">
+          <div className="text-xs text-muted-foreground">Assignments Pending Review</div>
+          <div className="font-display text-3xl font-semibold mt-1">{data?.homeworkPending ?? 0}</div>
+          <div className="text-xs text-muted-foreground mt-1">active homework</div>
+        </Card>
+        <Card className="rounded-2xl p-5">
+          <div className="text-xs text-muted-foreground">Upcoming Exams</div>
+          <div className="font-display text-3xl font-semibold mt-1">{data?.upcomingExams.length ?? 0}</div>
+          <div className="text-xs text-muted-foreground mt-1">scheduled next</div>
+        </Card>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <QuickAction to="/attendance" icon={ClipboardCheck} label="Mark Attendance" />
+        <QuickAction to="/gradebook" icon={BookOpenCheck} label="Enter Marks" />
+        <QuickAction to="/students" icon={GraduationCap} label="My Students" />
+        <QuickAction to="/timetable" icon={CalendarDays} label="My Timetable" />
+      </div>
+
+      {/* Today's schedule with status + subjects/classes */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        <Card className="rounded-2xl p-5 lg:col-span-2">
+          <div className="font-display font-semibold mb-4">Today's Schedule</div>
+          <div className="space-y-2">
+            {todayCount === 0 && (
+              <div className="rounded-xl border border-dashed py-12 text-center text-muted-foreground">
+                <Clock className="size-6 mx-auto mb-2 opacity-60" />
+                <div className="font-medium">No classes today</div>
+                <div className="text-xs">Enjoy the day off.</div>
+              </div>
+            )}
+            {(data?.todaySchedule ?? []).map((t: any, idx: number) => {
+              const st = periodStatus(t.start_time, t.end_time);
+              return (
+                <div key={t.id} className="flex items-center gap-3 rounded-xl border p-3">
+                  <div className="rounded-lg bg-secondary size-10 grid place-items-center text-xs font-semibold">
+                    P{idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{t.subjects?.name ?? "Class"} · {t.classes?.name}{t.classes?.section && ` - ${t.classes.section}`}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-3 mt-0.5">
+                      <span className="flex items-center gap-1"><Clock className="size-3" /> {t.start_time?.slice(0, 5)} – {t.end_time?.slice(0, 5)}</span>
+                      {t.room && <span className="flex items-center gap-1"><MapPin className="size-3" /> {t.room}</span>}
+                    </div>
+                  </div>
+                  <span className={`text-[11px] px-2 py-1 rounded-md border ${st.cls}`}>{st.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <div className="space-y-4">
+          <Card className="rounded-2xl p-5">
+            <div className="font-display font-semibold mb-3">My Subjects</div>
+            <ul className="space-y-2 text-sm">
+              {(data?.subjects ?? []).map((s: any) => (
+                <li key={s.id} className="flex items-center justify-between gap-3 min-w-0">
+                  <span className="font-medium truncate">{s.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{s.classes?.name}{s.classes?.section && ` · ${s.classes.section}`}</span>
+                </li>
+              ))}
+              {(data?.subjects ?? []).length === 0 && <li className="text-sm text-muted-foreground">No subjects assigned.</li>}
+            </ul>
+          </Card>
+          <Card className="rounded-2xl p-5">
+            <div className="font-display font-semibold mb-3">My Classes</div>
+            <div className="space-y-3">
+              {(data?.classStats ?? []).length === 0 && <div className="text-sm text-muted-foreground">No classes assigned.</div>}
+              {(data?.classStats ?? []).map((c: any) => (
+                <div key={c.id} className="rounded-xl border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium text-sm">{c.name}{c.section && ` · ${c.section}`}</div>
+                    <Badge variant="secondary" className="text-[10px]">{c.subject}</Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+                    <div><div className="font-semibold text-foreground text-sm">{c.total}</div>Students</div>
+                    <div><div className="font-semibold text-foreground text-sm">{c.boys}</div>Boys</div>
+                    <div><div className="font-semibold text-foreground text-sm">{c.girls}</div>Girls</div>
+                    <div><div className={`font-semibold text-sm ${c.attendanceMarked ? "text-emerald-600" : "text-amber-600"}`}>{c.attendanceMarked ? "Marked" : "Pending"}</div>Attendance</div>
+                    <div><div className="font-semibold text-foreground text-sm">{c.homeworkPending}</div>Homework</div>
+                    <div><div className="font-semibold text-foreground text-sm">{c.upcomingExams}</div>Exams</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Upcoming exams + Announcements */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <Card className="rounded-2xl p-5">
+          <div className="font-display font-semibold mb-3">Upcoming Exams</div>
+          <div className="space-y-2">
+            {(data?.upcomingExams ?? []).length === 0 && <div className="text-sm text-muted-foreground">No exams scheduled.</div>}
+            {(data?.upcomingExams ?? []).map((e: any) => (
+              <div key={e.id} className="flex items-center justify-between border rounded-xl p-3">
+                <div>
+                  <div className="font-medium text-sm">{e.name}</div>
+                  <div className="text-xs text-muted-foreground">{e.classes?.name}{e.classes?.section && ` · ${e.classes.section}`}</div>
+                </div>
+                <div className="text-xs font-medium text-primary">{format(new Date(e.exam_date), "MMM d")}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="rounded-2xl p-5">
+          <div className="font-display font-semibold mb-3">Announcements</div>
+          <div className="space-y-2">
+            {(data?.announcements ?? []).length === 0 && <div className="text-sm text-muted-foreground">No announcements.</div>}
+            {(data?.announcements ?? []).map((a: any) => (
+              <div key={a.id} className="border-l-2 border-primary pl-3">
+                <div className="font-medium text-sm">{a.title}</div>
+                <div className="text-xs text-muted-foreground line-clamp-2">{a.body}</div>
+                <div className="text-[10px] text-muted-foreground mt-1">{format(new Date(a.created_at), "MMM d, yyyy")}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+function StudentDashboard({ userId, fullName }: { userId: string; fullName: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["student-dash", userId],
+    queryFn: async () => {
+      const { data: student } = await supabase
+        .from("students")
+        .select("id, roll_no, admission_no, class_id, classes(name, section, academic_year)")
+        .eq("profile_id", userId)
+        .maybeSingle();
+      if (!student) return null;
+
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const weekStartStr = format(weekStart, "yyyy-MM-dd");
+      const termStart = format(addDays(new Date(), -120), "yyyy-MM-dd");
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      const [attRes, resRes, ttRes, annRes, hwRes, subjRes, examRes] = await Promise.all([
+        supabase.from("attendance").select("date,status").eq("student_id", student.id).gte("date", termStart).order("date"),
+        supabase.from("exam_results").select("marks_obtained, exams(max_marks, name)").eq("student_id", student.id),
+        student.class_id
+          ? supabase.from("timetable").select("id, day_of_week, start_time, end_time, room, subjects(name)").eq("class_id", student.class_id).order("start_time")
+          : Promise.resolve({ data: [] as any[] }),
+        supabase.from("announcements").select("id,title,body,created_at").order("created_at", { ascending: false }).limit(4),
+        student.class_id
+          ? supabase.from("homework").select("id,title,due_date,priority,subject_id,subjects(name)").eq("class_id", student.class_id)
+          : Promise.resolve({ data: [] as any[] }),
+        student.class_id
+          ? supabase.from("subjects").select("id,name").eq("class_id", student.class_id)
+          : Promise.resolve({ data: [] as any[] }),
+        student.class_id
+          ? supabase.from("exams").select("id,name,exam_date,subjects(name)").eq("class_id", student.class_id).gte("exam_date", today).order("exam_date").limit(5)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const attendance = attRes.data ?? [];
+      const presentDays = attendance.filter((a) => a.status === "present" || a.status === "late").length;
+      const totalDays = attendance.length;
+      const attendancePct = totalDays ? Math.round((presentDays / totalDays) * 100) : 0;
+
+      const weekBars = Array.from({ length: 5 }, (_, i) => {
+        const day = addDays(weekStart, i);
+        const rec = attendance.find((a) => isSameDay(new Date(a.date), day));
+        const pct = rec ? (rec.status === "present" ? 100 : rec.status === "late" ? 60 : 0) : 0;
+        return { label: format(day, "EEE"), pct, status: rec?.status ?? null };
+      });
+
+      const results = resRes.data ?? [];
+      const avgPct = results.length
+        ? Math.round(
+            (results.reduce((s: number, r: any) => s + (Number(r.marks_obtained) / Number(r.exams?.max_marks || 100)) * 100, 0) /
+              results.length),
+          )
+        : 0;
+
+      const todayDow = new Date().getDay();
+      const todayClasses = (ttRes.data ?? []).filter((t: any) => t.day_of_week === todayDow);
+
+      // Homework aggregates
+      const homework = (hwRes.data ?? []) as any[];
+      const hwIds = homework.map((h) => h.id);
+      const { data: subs } = hwIds.length
+        ? await supabase.from("homework_submissions").select("homework_id,status").in("homework_id", hwIds).eq("student_id", student.id)
+        : { data: [] as any[] };
+      const subMap = new Map((subs ?? []).map((s: any) => [s.homework_id, s.status]));
+      let pendingHw = 0, overdueHw = 0, completedHw = 0;
+      for (const h of homework) {
+        const st = subMap.get(h.id);
+        if (st === "submitted" || st === "reviewed") completedHw += 1;
+        else if (st === "overdue" || (new Date(h.due_date) < new Date(today))) overdueHw += 1;
+        else pendingHw += 1;
+      }
+
+      return {
+        student,
+        attendancePct,
+        presentDays,
+        totalDays,
+        weekBars,
+        avgPct,
+        examCount: results.length,
+        todayClasses,
+        announcements: annRes.data ?? [],
+        subjectsCount: (subjRes.data ?? []).length,
+        pendingHw,
+        overdueHw,
+        completedHw,
+        upcomingExams: (examRes.data ?? []) as any[],
+      };
+    },
+  });
+
+  const first = fullName.split(" ")[0];
+  const cls = data?.student?.classes as any;
+  const gradeLine = cls ? `${cls.name}${cls.section ? ` - ${cls.section}` : ""} · keep up the great work!` : "keep up the great work!";
+  const yr = cls?.academic_year ?? `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+
+  if (isLoading || !data) {
+    return (
+      <>
+        <PageHeader title={`Welcome ${first}`} subtitle={gradeLine} />
+        <Card className="p-8 rounded-2xl text-muted-foreground">Loading your dashboard…</Card>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader title={`Welcome ${first}`} subtitle={gradeLine} />
+      {/* Quick stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        <MiniStat label="Today's Classes" value={String(data.todayClasses.length)} tone="sky" />
+        <MiniStat label="Subjects" value={String(data.subjectsCount)} tone="indigo" />
+        <MiniStat label="Pending" value={String(data.pendingHw)} tone="violet" />
+        <MiniStat label="Overdue" value={String(data.overdueHw)} tone="coral" />
+        <MiniStat label="Upcoming Tests" value={String(data.upcomingExams.length)} tone="indigo" />
+        <MiniStat label="Attendance" value={`${data.attendancePct}%`} tone="sky" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 rounded-2xl overflow-hidden relative min-h-[240px] bg-[oklch(0.9_0.08_240)] p-6">
+          <div className="absolute top-4 right-4 rounded-xl bg-white/85 backdrop-blur px-4 py-2 flex items-center gap-2">
+            <CalendarPlus className="size-4 text-primary" />
+            <div className="text-xs">
+              <div className="text-muted-foreground">Academic Year</div>
+              <div className="font-semibold">{yr}</div>
+            </div>
+          </div>
+          <svg viewBox="0 0 400 200" className="absolute bottom-0 left-0 w-full" preserveAspectRatio="none">
+            <path d="M0,150 Q100,90 200,120 T400,110 L400,200 L0,200 Z" fill="oklch(0.75 0.15 145)" opacity="0.7" />
+            <path d="M0,170 Q100,130 200,150 T400,140 L400,200 L0,200 Z" fill="oklch(0.65 0.15 145)" />
+            <circle cx="320" cy="60" r="16" fill="oklch(0.85 0.15 80)" />
+            <polygon points="120,155 130,130 140,155" fill="oklch(0.45 0.15 275)" />
+            <polygon points="260,158 270,128 280,158" fill="oklch(0.45 0.15 275)" />
+            <circle cx="180" cy="150" r="6" fill="oklch(0.6 0.15 25)" />
+            <rect x="177" y="150" width="6" height="15" fill="oklch(0.5 0.15 275)" />
+            <circle cx="210" cy="145" r="6" fill="oklch(0.55 0.15 240)" />
+            <rect x="207" y="145" width="6" height="18" fill="oklch(0.55 0.15 240)" />
+          </svg>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          <StatCard label="Attendance" value={`${data.attendancePct}%`} subtitle={`${data.presentDays}/${data.totalDays} days`} tone="sky" />
+          <StatCard label="Avg Score" value={`${data.avgPct}%`} subtitle="across exams" tone="indigo" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <StatCard label="Exams Taken" value={String(data.examCount)} subtitle="this term" tone="violet" />
+        <StatCard label="Roll No" value={data.student?.roll_no ?? data.student?.admission_no ?? "—"} subtitle={cls ? `${cls.name}${cls.section ? `-${cls.section}` : ""}` : ""} tone="coral" />
+      </div>
+
+      {/* Assignments + Upcoming Tests */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <Card className="rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-display font-semibold">Daily Tasks</div>
+            <Link to="/assignments" className="text-sm text-primary">View all</Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl border p-3">
+              <div className="text-2xl font-display font-semibold">{data.pendingHw}</div>
+              <div className="text-xs text-muted-foreground">Pending</div>
+            </div>
+            <div className="rounded-xl border p-3">
+              <div className="text-2xl font-display font-semibold text-destructive">{data.overdueHw}</div>
+              <div className="text-xs text-muted-foreground">Overdue</div>
+            </div>
+            <div className="rounded-xl border p-3">
+              <div className="text-2xl font-display font-semibold text-primary">{data.completedHw}</div>
+              <div className="text-xs text-muted-foreground">Completed</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-display font-semibold">Upcoming Tests</div>
+            <Badge variant="secondary">{data.upcomingExams.length}</Badge>
+          </div>
+          <div className="space-y-2">
+            {data.upcomingExams.length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">No tests scheduled.</div>}
+            {data.upcomingExams.map((e: any) => (
+              <div key={e.id} className="flex items-center justify-between rounded-xl border p-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-sm truncate">{e.name}</div>
+                  <div className="text-xs text-muted-foreground truncate">{e.subjects?.name ?? "General"}</div>
+                </div>
+                <div className="text-xs text-muted-foreground shrink-0">{format(new Date(e.exam_date), "MMM d")}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <Card className="rounded-2xl p-5">
+          <div className="text-center font-display font-semibold mb-4">Attendance</div>
+          <AttendanceDonut pct={data.attendancePct} present={data.presentDays} total={data.totalDays} />
+        </Card>
+        <Card className="rounded-2xl p-5 md:col-span-2">
+          <div className="font-display font-semibold mb-4">My Attendance — this week</div>
+          <WeekBars bars={data.weekBars} />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <Card className="rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-display font-semibold">Today's Classes</div>
+            <Link to="/classes" className="text-sm text-primary">Full timetable</Link>
+          </div>
+          <div className="space-y-2">
+            {data.todayClasses.length === 0 && <div className="text-sm text-muted-foreground py-6 text-center">No classes scheduled today.</div>}
+            {data.todayClasses.map((t: any) => (
+              <div key={t.id} className="flex items-center gap-3 rounded-xl border p-3">
+                <div className="rounded-lg bg-secondary size-10 grid place-items-center">
+                  <Clock className="size-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium">{t.subjects?.name ?? "Class"}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                    <span>{t.start_time?.slice(0, 5)} – {t.end_time?.slice(0, 5)}</span>
+                    {t.room && <span className="flex items-center gap-1"><MapPin className="size-3" /> {t.room}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-display font-semibold">Announcements</div>
+            <Badge variant="secondary">ALL</Badge>
+          </div>
+          <div className="space-y-3">
+            {data.announcements.length === 0 && <div className="text-sm text-muted-foreground py-6 text-center">No announcements.</div>}
+            {data.announcements.map((a: any) => (
+              <div key={a.id} className="border-l-2 border-primary pl-3">
+                <div className="font-medium text-sm">{a.title}</div>
+                <div className="text-xs text-muted-foreground line-clamp-2">{a.body}</div>
+                <div className="text-[10px] text-muted-foreground mt-1">{format(new Date(a.created_at), "MMM d, yyyy")}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+function AttendanceDonut({ pct, present, total }: { pct: number; present: number; total: number }) {
+  const r = 56;
+  const c = 2 * Math.PI * r;
+  const dash = (pct / 100) * c;
+  return (
+    <div className="relative size-40 mx-auto">
+      <svg viewBox="0 0 140 140" className="size-40 -rotate-90">
+        <circle cx="70" cy="70" r={r} fill="none" stroke="oklch(0.92 0.02 250)" strokeWidth="14" />
+        <circle cx="70" cy="70" r={r} fill="none" stroke="oklch(0.75 0.15 55)" strokeWidth="14" strokeLinecap="round" strokeDasharray={`${dash} ${c}`} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="font-display text-3xl font-semibold">{pct}%</div>
+        <div className="text-xs text-muted-foreground">{present}/{total} days</div>
+      </div>
+    </div>
+  );
+}
+
+function WeekBars({ bars }: { bars: { label: string; pct: number; status: string | null }[] }) {
+  const max = 100;
+  return (
+    <div className="flex items-end gap-4 h-40 px-2">
+      {bars.map((b) => (
+        <div key={b.label} className="flex-1 flex flex-col items-center gap-2">
+          <div className="text-xs text-muted-foreground">{b.pct}%</div>
+          <div className="w-full bg-secondary rounded-full h-32 flex items-end overflow-hidden">
+            <div
+              className="w-full rounded-full transition-all"
+              style={{
+                height: `${(b.pct / max) * 100}%`,
+                background: b.status === "present" ? "oklch(0.55 0.15 145)" : b.status === "late" ? "oklch(0.75 0.15 80)" : b.status === "absent" ? "oklch(0.65 0.2 25)" : "oklch(0.55 0.15 275)",
+              }}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground">{b.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ParentDashboard({ userId, fullName }: { userId: string; fullName: string }) {
+  const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const { data } = useQuery({
+    queryKey: ["parent-dash", userId],
+    queryFn: async () => {
+      const { data: links } = await supabase.from("parent_student").select("student_id").eq("parent_id", userId);
+      const ids = (links ?? []).map((l) => l.student_id);
+      if (ids.length === 0) return { children: [], fees: [], attMap: {}, hwMap: {}, perfMap: {} };
+      const since = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+      const classIdsRes = await supabase.from("students").select("id, admission_no, class_id, profiles(full_name), classes(name,section)").in("id", ids);
+      const kids = classIdsRes.data ?? [];
+      const classIds = kids.map((k: any) => k.class_id).filter(Boolean);
+      const [{ data: fees }, { data: att }, { data: hw }, { data: subs }, { data: results }] = await Promise.all([
+        supabase.from("fee_assignments").select("student_id, title, due_date, amount_due, amount_paid, status").in("student_id", ids),
+        supabase.from("attendance").select("student_id,status,date").in("student_id", ids).gte("date", since),
+        classIds.length ? supabase.from("homework").select("id,class_id,due_date") : Promise.resolve({ data: [] as any[] }),
+        supabase.from("homework_submissions").select("student_id,homework_id,submitted_at").in("student_id", ids),
+        supabase.from("exam_results").select("student_id,marks_obtained,exams(max_marks)").in("student_id", ids),
+      ]);
+      const attMap: Record<string, { total: number; present: number }> = {};
+      for (const r of att ?? []) {
+        const m = (attMap[r.student_id] ||= { total: 0, present: 0 });
+        m.total += 1;
+        if (r.status === "present" || r.status === "late") m.present += 1;
+      }
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const hwMap: Record<string, { total: number; submitted: number; missed: number; pending: number }> = {};
+      const subsByStudent: Record<string, Set<string>> = {};
+      const subDates: Record<string, Map<string, string>> = {};
+      for (const s of subs ?? []) {
+        (subsByStudent[s.student_id] ||= new Set()).add(s.homework_id);
+        (subDates[s.student_id] ||= new Map()).set(s.homework_id, s.submitted_at as any);
+      }
+      for (const k of kids as any[]) {
+        const classHw = (hw ?? []).filter((h: any) => h.class_id === k.class_id);
+        const submittedSet = subsByStudent[k.id] ?? new Set();
+        let submitted = 0, missed = 0, pending = 0;
+        for (const h of classHw) {
+          const due = h.due_date ? new Date(h.due_date) : null;
+          if (submittedSet.has(h.id)) submitted += 1;
+          else if (due && due < today) missed += 1;
+          else pending += 1;
+        }
+        hwMap[k.id] = { total: classHw.length, submitted, missed, pending };
+      }
+      const perfMap: Record<string, { got: number; max: number }> = {};
+      for (const r of (results as any[]) ?? []) {
+        const m = (perfMap[r.student_id] ||= { got: 0, max: 0 });
+        m.got += Number(r.marks_obtained) || 0;
+        m.max += Number(r.exams?.max_marks) || 0;
+      }
+      return { children: kids, fees: fees ?? [], attMap, hwMap, perfMap };
+    },
+  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const fees = data?.fees ?? [];
+  const children = data?.children ?? [];
+  const totalAnnual = fees.reduce((s, f) => s + Number(f.amount_due), 0);
+  const totalPaid = fees.reduce((s, f) => s + Number(f.amount_paid), 0);
+  const outstanding = totalAnnual - totalPaid;
+  const openItems = fees.filter((f) => f.status !== "paid");
+  const overdue = openItems.filter((f) => new Date(f.due_date) < today);
+  const overdueAmt = overdue.reduce((s, f) => s + Number(f.amount_due) - Number(f.amount_paid), 0);
+  const next = openItems
+    .filter((f) => new Date(f.due_date) >= today)
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+
+  return (
+    <>
+      <PageHeader title={`Hi ${fullName.split(" ")[0]}`} subtitle={`Family dashboard · ${children.length} child${children.length === 1 ? "" : "ren"}`} />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <StatCard label="Total annual" value={inr(totalAnnual)} tone="indigo" />
+        <StatCard label="Total paid" value={inr(totalPaid)} tone="violet" />
+        <StatCard label="Outstanding" value={inr(outstanding)} tone="coral" />
+        <StatCard label="Upcoming" value={next ? inr(Number(next.amount_due) - Number(next.amount_paid)) : "—"} subtitle={next ? format(new Date(next.due_date), "MMM d") : "All clear"} tone="sky" />
+        <StatCard label="Overdue" value={inr(overdueAmt)} tone="coral" />
+        <StatCard label="Next due" value={next ? format(new Date(next.due_date), "MMM d") : "—"} tone="indigo" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {children.map((child: any) => {
+          const cf = fees.filter((f) => f.student_id === child.id);
+          const cAnnual = cf.reduce((s, f) => s + Number(f.amount_due), 0);
+          const cPaid = cf.reduce((s, f) => s + Number(f.amount_paid), 0);
+          const cOut = cAnnual - cPaid;
+          const cNext = cf.filter((f) => f.status !== "paid").sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+          const pct = cAnnual > 0 ? Math.round((cPaid / cAnnual) * 100) : 0;
+          const att = data?.attMap[child.id];
+          const attPct = att && att.total ? Math.round((att.present / att.total) * 100) : null;
+          const hw = data?.hwMap[child.id];
+          const perf = data?.perfMap[child.id];
+          const perfPct = perf && perf.max ? Math.round((perf.got / perf.max) * 100) : null;
+          return (
+            <Card key={child.id} className="p-5 rounded-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="size-11 rounded-xl bg-stat-indigo text-stat-indigo-foreground grid place-items-center shrink-0"><GraduationCap className="size-5" /></div>
+                  <div className="min-w-0">
+                    <div className="font-display font-semibold truncate">{child.profiles?.full_name}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      Adm. {child.admission_no || "—"}{child.classes ? ` · ${child.classes.name}${child.classes.section ? ` · ${child.classes.section}` : ""}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <Badge variant="secondary" className="shrink-0">{pct}% paid</Badge>
+              </div>
+              {/* Academic widgets */}
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border p-3">
+                  <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1"><ClipboardCheck className="size-3" />Attendance</div>
+                  <div className={`font-semibold text-lg ${attPct == null ? "text-muted-foreground" : attPct >= 85 ? "text-emerald-600" : attPct >= 70 ? "text-amber-600" : "text-red-600"}`}>{attPct == null ? "—" : `${attPct}%`}</div>
+                  <div className="text-[10px] text-muted-foreground">this month</div>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1"><BookOpenCheck className="size-3" />Performance</div>
+                  <div className="font-semibold text-lg">{perfPct == null ? "—" : `${perfPct}%`}</div>
+                  <div className="text-[10px] text-muted-foreground">across exams</div>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <div className="text-[10px] uppercase text-muted-foreground">Homework</div>
+                  <div className="font-semibold text-lg">
+                    <span className="text-emerald-600">{hw?.submitted ?? 0}</span>
+                    <span className="text-muted-foreground mx-1">/</span>
+                    <span className="text-red-600">{hw?.missed ?? 0}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">done / missed</div>
+                </div>
+              </div>
+
+              {/* Fee summary */}
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-secondary/60 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">Annual</div>
+                  <div className="font-semibold text-sm">{inr(cAnnual)}</div>
+                </div>
+                <div className="rounded-xl bg-secondary/60 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">Paid</div>
+                  <div className="font-semibold text-sm text-emerald-600">{inr(cPaid)}</div>
+                </div>
+                <div className="rounded-xl bg-secondary/60 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">Due</div>
+                  <div className="font-semibold text-sm text-amber-600">{inr(cOut)}</div>
+                </div>
+              </div>
+              {cNext && (
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Next: <span className="font-medium text-foreground">{cNext.title}</span> · {inr(Number(cNext.amount_due) - Number(cNext.amount_paid))} due {format(new Date(cNext.due_date), "MMM d, yyyy")}
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link to="/children/$studentId" params={{ studentId: child.id }}>
+                  <Badge variant="default" className="cursor-pointer">Full report →</Badge>
+                </Link>
+                <Link to="/fees">
+                  <Badge variant="secondary" className="cursor-pointer">Fees & pay →</Badge>
+                </Link>
+              </div>
+            </Card>
+          );
+        })}
+        {children.length === 0 && (
+          <Card className="p-8 rounded-2xl md:col-span-2 text-center text-muted-foreground">
+            No children linked yet. <Link to="/children" className="underline">Link a child</Link> to see fees.
+          </Card>
+        )}
+      </div>
+    </>
+  );
+}
