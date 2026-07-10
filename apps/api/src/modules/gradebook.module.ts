@@ -277,10 +277,23 @@ export class GradebookService {
     const subjects = await this.prisma.subject.findMany({ where: { schoolId: user.schoolId } });
     const subjectName = new Map<string, string>(subjects.map((s) => [s.id, s.name] as const));
 
-    const byExam = new Map<string, { examId: string; examName: string; date: Date; rows: { subject: string; score: number; maxScore: number; grade: string | null }[] }>();
+    type ExamRow = { subject: string; score: number; maxScore: number; grade: string | null };
+    type ExamAcc = { examId: string; examName: string; date: Date; rows: ExamRow[] };
+    const byExam = new Map<string, ExamAcc>();
     for (const r of results) {
-      const e = byExam.get(r.examId) ?? { examId: r.examId, examName: r.exam.name, date: r.exam.startDate, rows: [] };
-      e.rows.push({ subject: subjectName.get(r.subjectId) ?? '?', score: Number(r.score), maxScore: r.maxScore, grade: r.grade });
+      // explicit annotation so the `rows: []` fallback never collapses to never[]
+      const e: ExamAcc = byExam.get(r.examId) ?? {
+        examId: r.examId,
+        examName: r.exam.name,
+        date: r.exam.startDate,
+        rows: [],
+      };
+      e.rows.push({
+        subject: subjectName.get(r.subjectId) ?? '?',
+        score: Number(r.score),
+        maxScore: r.maxScore,
+        grade: r.grade,
+      });
       byExam.set(r.examId, e);
     }
     const exams = Array.from(byExam.values()).map((e) => {
