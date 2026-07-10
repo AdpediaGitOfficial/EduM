@@ -84,18 +84,13 @@ export class ScopeService {
 
   async assertTeacherSubjectSection(user: AuthUser, sectionId: string, subjectId: string): Promise<void> {
     if (user.role !== 'teacher') return;
+    // strict 'own_subjects' scope: requires an explicit teaching assignment
+    // (being class teacher of the section is NOT enough for subject work)
     const found = await this.prisma.teachingAssignment.findFirst({
       where: { staffId: user.staffId ?? '', sectionId, subjectId },
       select: { id: true },
     });
-    // class teachers may also manage homework for their own section
-    if (!found) {
-      const ct = await this.prisma.section.findFirst({
-        where: { id: sectionId, classTeacherId: user.staffId ?? '' },
-        select: { id: true },
-      });
-      if (!ct) throw new ForbiddenException('You are not assigned to this subject/section');
-    }
+    if (!found) throw new ForbiddenException('You are not assigned to this subject/section');
   }
 
   /** Section ids visible to the user (for list filtering). */
