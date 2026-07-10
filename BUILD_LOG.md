@@ -6,8 +6,10 @@ prompt phases.
 
 ## Phase 0 — Scaffold
 - Monorepo: npm workspaces (`apps/api` NestJS 11 + Prisma 6, `apps/web` Next.js 15).
-- Pre-existing Lovable/Supabase prototype moved intact to `legacy-lovable/`
-  (not deleted; not used by the ERP).
+- Pre-existing Lovable/Supabase prototype was initially parked in
+  `legacy-lovable/`, then **fully removed** (along with the Lovable AGENTS.md
+  banner) to make EduM a 100% standalone application. It remains recoverable
+  from git history only; the ERP never depended on it.
 
 ## Phase 1 — Foundation ✅
 - Prisma schema: all spec tables + the required additions (payroll,
@@ -151,5 +153,11 @@ IP allowlist CRUD.
 - **hr users scope**: HR's `users` CRUD is restricted to staff roles in the
   service layer (per matrix `CRUD(staff)`).
 - Docker images unbuilt in this environment (no daemon) — see audit table.
-- Legacy Lovable prototype left untouched in `legacy-lovable/`; it is not
-  part of the ERP runtime.
+
+## Post-audit: Lovable removal ✅
+- Deleted `legacy-lovable/` (prototype source, `.lovable/` metadata,
+  Supabase client/config/migrations, bun lockfile, archived zip) and the
+  Lovable AGENTS.md banner; wrote a standalone contributor guide instead.
+- Verified zero `lovable`/`supabase` references remain in tracked files and
+  zero such packages in any dependency tree (root, api, web, lockfile).
+- Both apps rebuilt clean and the Jest suite re-passed after removal.

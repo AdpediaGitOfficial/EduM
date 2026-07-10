@@ -13,8 +13,9 @@ students.
 | Testing    | Jest + Supertest (RBAC guards, tenant isolation, fee reconciliation) |
 | Deployment | Docker + docker-compose (one command brings up everything, migrated & seeded) |
 
-> The previous Lovable/Supabase prototype was preserved untouched in
-> [`legacy-lovable/`](legacy-lovable/). The ERP lives in `apps/`.
+EduM is fully standalone: auth (JWT + bcrypt), authorization (database-driven
+RBAC), data access (Prisma), file storage (S3-compatible) and background
+providers are all first-party code — no app-builder or BaaS dependencies.
 
 ---
 
@@ -113,6 +114,5 @@ apps/api        NestJS API (src/modules/* one file per domain module)
   test/         Jest integration + unit tests
 apps/web        Next.js app (src/app portals, src/features shared UI logic)
 docker/         Dockerfiles + API entrypoint (migrate → seed → serve)
-legacy-lovable/ previous Supabase/Lovable prototype (unused)
 BUILD_LOG.md    honest per-phase build record incl. known gaps
 ```
