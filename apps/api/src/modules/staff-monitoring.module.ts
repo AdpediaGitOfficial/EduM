@@ -33,7 +33,9 @@ export class StaffMonitoringService {
       },
     });
     const records = await this.prisma.staffAttendance.findMany({ where: { date, staffId: { in: staff.map((s) => s.id) } } });
-    const byStaff = new Map(records.map((r) => [r.staffId, r]));
+    const byStaff = new Map<string, (typeof records)[number]>(
+      records.map((r) => [r.staffId, r] as const),
+    );
     return staff.map((s) => ({ ...s, status: byStaff.get(s.id)?.status ?? null, note: byStaff.get(s.id)?.note ?? null }));
   }
 

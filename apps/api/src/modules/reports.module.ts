@@ -172,7 +172,7 @@ export class ReportsService {
       },
     });
     const subjects = await this.prisma.subject.findMany({ where: { schoolId: user.schoolId } });
-    const subjectName = new Map(subjects.map((s) => [s.id, s.name]));
+    const subjectName = new Map<string, string>(subjects.map((s) => [s.id, s.name] as const));
     return results.map((r) => ({
       exam: r.exam.name,
       admission_no: r.student.admissionNo,

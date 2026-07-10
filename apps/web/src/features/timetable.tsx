@@ -33,7 +33,7 @@ export function TimetableGrid({ slots, showSection, onCellClick }: {
   const shownDays = days.length ? days : [1, 2, 3, 4, 5];
   const periods = Array.from(new Set(slots.map((s) => s.periodNo))).sort((a, b) => a - b);
   const shownPeriods = periods.length ? periods : [1, 2, 3, 4, 5, 6, 7, 8];
-  const byKey = new Map(slots.map((s) => [`${s.dayOfWeek}-${s.periodNo}`, s]));
+  const byKey = new Map<string, Slot>(slots.map((s) => [`${s.dayOfWeek}-${s.periodNo}`, s] as const));
   const timeFor = (p: number) => {
     const s = slots.find((x) => x.periodNo === p);
     return s ? `${s.startTime}–${s.endTime}` : '';

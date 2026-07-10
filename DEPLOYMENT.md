@@ -34,7 +34,9 @@ SQL
 sudo mkdir -p /opt/edum && sudo chown $USER /opt/edum
 git clone <your-repo-url> /opt/edum && cd /opt/edum
 
-npm install
+# npm ci installs EXACTLY the committed lockfile — always use it on servers
+# (plain `npm install` may re-resolve newer minor versions and drift)
+npm ci
 
 # environment: one file for the API (dotenv), values documented in .env.example
 cp .env.example apps/api/.env
@@ -112,7 +114,7 @@ sudo certbot --nginx -d school.example.com
 ```bash
 cd /opt/edum
 git pull
-npm install
+npm ci
 npm run build
 npm run migrate -w apps/api
 pm2 reload ecosystem.config.js
